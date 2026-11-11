@@ -1,0 +1,5 @@
+# Ignore local Word drafts so only final PDFs and images are published
+*.docx
+~$*
+Thumbs.db
+.DS_Store
