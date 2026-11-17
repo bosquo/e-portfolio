@@ -4,8 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>3D Gaussian Splat Viewer — Digital Twin iDEAS:lab</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@playcanvas/supersplat-viewer@latest/dist/viewer.css" />
   <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
     html, body {
       margin: 0;
       padding: 0;
@@ -21,6 +26,18 @@
       width: 100%;
       height: 100%;
       position: relative;
+      touch-action: none;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
     }
 
     .viewer-status {
@@ -34,7 +51,7 @@
       padding: 1.5rem;
       background: #161F1B;
       z-index: 20;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.35s ease;
     }
 
     .viewer-status.hidden {
@@ -43,8 +60,8 @@
     }
 
     .spinner {
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       border: 3px solid rgba(231, 241, 236, 0.2);
       border-top-color: #84B59C;
       border-radius: 50%;
@@ -66,8 +83,35 @@
     .status-sub {
       font-size: 0.82rem;
       color: #A5B5AD;
-      max-width: 440px;
+      max-width: 460px;
       line-height: 1.5;
+    }
+
+    .viewer-toolbar {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 6px;
+      z-index: 10;
+    }
+
+    .viewer-btn {
+      background: rgba(22, 31, 27, 0.82);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #FAF9F6;
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 0.38rem 0.68rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .viewer-btn:hover {
+      background: rgba(45, 106, 79, 0.85);
+      border-color: rgba(132, 181, 156, 0.5);
     }
 
     .controls-hint {
@@ -85,28 +129,25 @@
       z-index: 10;
     }
   </style>
-
-  <script type="importmap">
-    {
-      "imports": {
-        "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@2/build/playcanvas.mjs",
-        "@playcanvas/supersplat-viewer/viewer": "https://cdn.jsdelivr.net/npm/@playcanvas/supersplat-viewer@latest/dist/viewer.js",
-        "@playcanvas/supersplat-viewer/settings": "https://cdn.jsdelivr.net/npm/@playcanvas/supersplat-viewer@latest/dist/settings.js"
-      }
-    }
-  </script>
 </head>
 <body>
   <div id="viewer-container">
     <div class="viewer-status" id="viewer-status">
       <div class="spinner" id="status-spinner"></div>
       <div class="status-title" id="status-title">Loading 3D Gaussian Splat (2.5M Gaussians)…</div>
-      <div class="status-sub" id="status-sub"> Powered by PlayCanvas SuperSplat · Digital Twin iDEAS:lab (260k iterations, MRNF)</div>
+      <div class="status-sub" id="status-sub">Downloading 35 MB .sog model · Digital Twin iDEAS:lab (260k iterations, MRNF)</div>
     </div>
-    <div class="controls-hint">Left-drag: Orbit · Right-drag: Pan · Scroll: Zoom · WASD: Fly</div>
+
+    <div class="viewer-toolbar">
+      <button class="viewer-btn" id="btn-reset" title="Reset camera to starting view">Reset View</button>
+      <button class="viewer-btn" id="btn-fullscreen" title="Toggle fullscreen">Fullscreen</button>
+    </div>
+
+    <div class="controls-hint">Left-drag: Orbit · Right-drag: Pan · Scroll: Zoom · WASD / Arrows: Fly</div>
   </div>
 
   <script type="module">
+    const container = document.getElementById('viewer-container');
     const statusBox = document.getElementById('viewer-status');
     const spinner = document.getElementById('status-spinner');
     const statusTitle = document.getElementById('status-title');
@@ -117,58 +158,193 @@
     if (window.location.protocol === 'file:') {
       spinner.style.display = 'none';
       statusTitle.textContent = 'Interactive 3D Splat Viewer Requires HTTP/HTTPS';
-      statusSub.innerHTML = 'Browsers block streaming <code>.sog</code> WebGL/WebGPU assets over local <code>file://</code> URLs. Once opened on <strong>GitHub Pages</strong> (or a local web server such as VS Code Live Server), the interactive 2.5M Gaussian Splat renders here automatically.';
+      statusSub.innerHTML = 'Browsers block streaming <code>.sog</code> WebGL/WebGPU assets over local <code>file://</code> URLs. Open your live <strong>GitHub Pages</strong> site (or a local web server) to interact with the 3D Gaussian Splat.';
     } else {
-      try {
-        const [{ createViewer }, { defaultSettings }] = await Promise.all([
-          import('@playcanvas/supersplat-viewer/viewer'),
-          import('@playcanvas/supersplat-viewer/settings')
-        ]);
+      initPlayCanvasSplat();
+    }
 
-        const settings = defaultSettings();
-        if (settings.background) {
-          settings.background.color = [0.086, 0.122, 0.106];
+    async function initPlayCanvasSplat() {
+      try {
+        let pc;
+        try {
+          pc = await import('https://cdn.jsdelivr.net/npm/playcanvas@2/build/playcanvas.mjs');
+        } catch {
+          pc = await import('https://unpkg.com/playcanvas@2/build/playcanvas.mjs');
         }
 
-        const viewer = await createViewer({
-          container: document.getElementById('viewer-container'),
-          settings,
-          contentUrl: SOG_FILE,
-          posterUrl: './cover.png'
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+
+        const app = new pc.Application(canvas, {
+          graphicsDeviceOptions: {
+            antialias: false,
+            alpha: false,
+            powerPreference: 'high-performance'
+          }
         });
 
-        statusBox.classList.add('hidden');
-      } catch (err) {
-        console.warn('SuperSplat viewer fallback triggered:', err);
-        // Fallback to PlayCanvas Web Components (<pc-app> / <pc-splat>) if needed
-        try {
-          await import('https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/web-components.mjs');
-          const container = document.getElementById('viewer-container');
-          const appEl = document.createElement('div');
-          appEl.style.width = '100%';
-          appEl.style.height = '100%';
-          appEl.innerHTML = `
-            <pc-app antialias="false" max-pixel-ratio="1">
-              <pc-asset src="https://cdn.jsdelivr.net/npm/playcanvas@2/scripts/esm/camera-controls.mjs"></pc-asset>
-              <pc-asset id="splat-sog" src="${SOG_FILE}"></pc-asset>
-              <pc-scene>
-                <pc-entity position="0 1.2 -2.5">
-                  <pc-camera clear-color="0.086 0.122 0.106 1"></pc-camera>
-                  <pc-script name="cameraControls"></pc-script>
-                </pc-entity>
-                <pc-entity rotation="0 0 180">
-                  <pc-splat asset="splat-sog"></pc-splat>
-                </pc-entity>
-              </pc-scene>
-            </pc-app>
-          `;
-          container.appendChild(appEl);
-          statusBox.classList.add('hidden');
-        } catch (fallbackErr) {
-          spinner.style.display = 'none';
-          statusTitle.textContent = 'Could not load 3D Gaussian Splat';
-          statusSub.textContent = String(fallbackErr?.message || err?.message || 'Unknown error');
+        app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
+        app.setCanvasResolution(pc.RESOLUTION_AUTO);
+        app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+        app.start();
+
+        window.addEventListener('resize', () => app.resizeCanvas());
+
+        // Create Camera Entity
+        const camera = new pc.Entity('Camera');
+        camera.addComponent('camera', {
+          clearColor: new pc.Color(0.086, 0.122, 0.106),
+          fov: 60,
+          nearClip: 0.05,
+          farClip: 100
+        });
+        app.root.addChild(camera);
+
+        // Orbit & Fly Camera State
+        const defaultState = {
+          yaw: 25,
+          pitch: -15,
+          distance: 3.2,
+          target: new pc.Vec3(0, 0.1, 0)
+        };
+
+        let yaw = defaultState.yaw;
+        let pitch = defaultState.pitch;
+        let distance = defaultState.distance;
+        const target = defaultState.target.clone();
+
+        function updateCameraTransform() {
+          pitch = Math.max(-88, Math.min(88, pitch));
+          distance = Math.max(0.15, Math.min(18, distance));
+
+          const pitchRad = pitch * pc.math.DEG_TO_RAD;
+          const yawRad = yaw * pc.math.DEG_TO_RAD;
+
+          const x = target.x + distance * Math.cos(pitchRad) * Math.sin(yawRad);
+          const y = target.y - distance * Math.sin(pitchRad);
+          const z = target.z + distance * Math.cos(pitchRad) * Math.cos(yawRad);
+
+          camera.setPosition(x, y, z);
+          camera.lookAt(target);
         }
+
+        updateCameraTransform();
+
+        // Pointer Controls (Orbit + Pan)
+        let isDragging = false;
+        let dragMode = 'orbit'; // 'orbit' or 'pan'
+        let lastX = 0;
+        let lastY = 0;
+
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        canvas.addEventListener('pointerdown', (e) => {
+          isDragging = true;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          dragMode = (e.button === 2 || e.button === 1 || e.shiftKey) ? 'pan' : 'orbit';
+          canvas.setPointerCapture(e.pointerId);
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+          if (!isDragging) return;
+          const dx = e.clientX - lastX;
+          const dy = e.clientY - lastY;
+          lastX = e.clientX;
+          lastY = e.clientY;
+
+          if (dragMode === 'orbit') {
+            yaw -= dx * 0.32;
+            pitch -= dy * 0.32;
+          } else {
+            const panSpeed = distance * 0.0018;
+            const right = camera.right.clone().mulScalar(-dx * panSpeed);
+            const up = camera.up.clone().mulScalar(dy * panSpeed);
+            target.add(right).add(up);
+          }
+          updateCameraTransform();
+        });
+
+        canvas.addEventListener('pointerup', (e) => {
+          isDragging = false;
+          try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+          distance *= zoomFactor;
+          updateCameraTransform();
+        }, { passive: false });
+
+        // Keyboard Fly Controls (WASD / Arrow Keys)
+        const keys = new Set();
+        window.addEventListener('keydown', (e) => keys.add(e.code));
+        window.addEventListener('keyup', (e) => keys.delete(e.code));
+
+        app.on('update', (dt) => {
+          if (keys.size === 0) return;
+          const moveSpeed = Math.max(1.2, distance * 0.75) * dt;
+          const forward = camera.forward.clone();
+          const right = camera.right.clone();
+          const up = pc.Vec3.UP;
+
+          if (keys.has('KeyW') || keys.has('ArrowUp')) target.add(forward.clone().mulScalar(moveSpeed));
+          if (keys.has('KeyS') || keys.has('ArrowDown')) target.add(forward.clone().mulScalar(-moveSpeed));
+          if (keys.has('KeyD') || keys.has('ArrowRight')) target.add(right.clone().mulScalar(moveSpeed));
+          if (keys.has('KeyA') || keys.has('ArrowLeft')) target.add(right.clone().mulScalar(-moveSpeed));
+          if (keys.has('KeyE')) target.add(up.clone().mulScalar(moveSpeed));
+          if (keys.has('KeyQ')) target.add(up.clone().mulScalar(-moveSpeed));
+
+          updateCameraTransform();
+        });
+
+        // Load .sog Asset
+        const splatAsset = new pc.Asset('ideaslab-splat', 'gsplat', {
+          url: SOG_FILE
+        });
+
+        splatAsset.on('load', () => {
+          const splatEntity = new pc.Entity('iDEASLabSplat');
+          splatEntity.addComponent('gsplat', {
+            asset: splatAsset
+          });
+          // Standard COLMAP / 3DGS orientation flip so room is right-side up
+          splatEntity.setLocalEulerAngles(0, 0, 180);
+          app.root.addChild(splatEntity);
+
+          statusBox.classList.add('hidden');
+        });
+
+        splatAsset.on('error', (err) => {
+          spinner.style.display = 'none';
+          statusTitle.textContent = 'Failed to load .sog Gaussian Splat';
+          statusSub.textContent = String(err || 'Could not decode .sog file.');
+        });
+
+        app.assets.add(splatAsset);
+        app.assets.load(splatAsset);
+
+        // Toolbar Buttons
+        document.getElementById('btn-reset').addEventListener('click', () => {
+          yaw = defaultState.yaw;
+          pitch = defaultState.pitch;
+          distance = defaultState.distance;
+          target.copy(defaultState.target);
+          updateCameraTransform();
+        });
+
+        document.getElementById('btn-fullscreen').addEventListener('click', () => {
+          if (!document.fullscreenElement) {
+            container.requestFullscreen?.();
+          } else {
+            document.exitFullscreen?.();
+          }
+        });
+      } catch (err) {
+        spinner.style.display = 'none';
+        statusTitle.textContent = 'Could not initialize 3D Gaussian Splat Viewer';
+        statusSub.textContent = String(err?.message || err);
       }
     }
   </script>
