@@ -140,7 +140,6 @@
 
     <div class="viewer-toolbar">
       <button class="viewer-btn" id="btn-reset" title="Reset camera to starting view">Reset View</button>
-      <button class="viewer-btn" id="btn-copy-pov" title="Copy current camera coordinates">Copy POV</button>
       <button class="viewer-btn" id="btn-fullscreen" title="Toggle fullscreen">Fullscreen</button>
     </div>
 
@@ -202,13 +201,11 @@
         app.root.addChild(camera);
 
         // Orbit & Fly Camera State
-        // Room bounds in world space (after 180° Z flip):
-        // X: [-2.4, +5.1], Y: [+1.55 (floor) to +4.30 (ceiling)], Z: [-4.9, +5.0]
         const defaultState = {
-          yaw: 25,
-          pitch: -8,
+          yaw: -33.6,
+          pitch: -7.4,
           distance: 1.4,
-          target: new pc.Vec3(1.2, 2.65, -0.5)
+          target: new pc.Vec3(0.54, 2.97, 0)
         };
 
         let yaw = defaultState.yaw;
@@ -335,23 +332,6 @@
           distance = defaultState.distance;
           target.copy(defaultState.target);
           updateCameraTransform();
-        });
-
-        const copyBtn = document.getElementById('btn-copy-pov');
-        copyBtn.addEventListener('click', () => {
-          const pov = {
-            yaw: Number(yaw.toFixed(1)),
-            pitch: Number(pitch.toFixed(1)),
-            distance: Number(distance.toFixed(2)),
-            target: [
-              Number(target.x.toFixed(2)),
-              Number(target.y.toFixed(2)),
-              Number(target.z.toFixed(2))
-            ]
-          };
-          navigator.clipboard?.writeText(JSON.stringify(pov));
-          copyBtn.textContent = 'Copied POV!';
-          setTimeout(() => { copyBtn.textContent = 'Copy POV'; }, 1800);
         });
 
         document.getElementById('btn-fullscreen').addEventListener('click', () => {
