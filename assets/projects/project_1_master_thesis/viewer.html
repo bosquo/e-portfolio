@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Gaussian Splat Viewer — Digital Twin iDEAS:lab</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@playcanvas/supersplat-viewer@latest/dist/viewer.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #161F1B;
+      color: #FAF9F6;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    #viewer-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    .viewer-status {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 1.5rem;
+      background: #161F1B;
+      z-index: 20;
+      transition: opacity 0.3s ease;
+    }
+
+    .viewer-status.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .spinner {
+      width: 38px;
+      height: 38px;
+      border: 3px solid rgba(231, 241, 236, 0.2);
+      border-top-color: #84B59C;
+      border-radius: 50%;
+      animation: spin 0.85s linear infinite;
+      margin-bottom: 0.9rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .status-title {
+      font-size: 0.96rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: #FAF9F6;
+    }
+
+    .status-sub {
+      font-size: 0.82rem;
+      color: #A5B5AD;
+      max-width: 440px;
+      line-height: 1.5;
+    }
+
+    .controls-hint {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      background: rgba(22, 31, 27, 0.78);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #E7F1EC;
+      font-size: 0.74rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@2/build/playcanvas.mjs",
+        "@playcanvas/supersplat-viewer/viewer": "https://cdn.jsdelivr.net/npm/@playcanvas/supersplat-viewer@latest/dist/viewer.js",
+        "@playcanvas/supersplat-viewer/settings": "https://cdn.jsdelivr.net/npm/@playcanvas/supersplat-viewer@latest/dist/settings.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="viewer-container">
+    <div class="viewer-status" id="viewer-status">
+      <div class="spinner" id="status-spinner"></div>
+      <div class="status-title" id="status-title">Loading 3D Gaussian Splat (2.5M Gaussians)…</div>
+      <div class="status-sub" id="status-sub"> Powered by PlayCanvas SuperSplat · Digital Twin iDEAS:lab (260k iterations, MRNF)</div>
+    </div>
+    <div class="controls-hint">Left-drag: Orbit · Right-drag: Pan · Scroll: Zoom · WASD: Fly</div>
+  </div>
+
+  <script type="module">
+    const statusBox = document.getElementById('viewer-status');
+    const spinner = document.getElementById('status-spinner');
+    const statusTitle = document.getElementById('status-title');
+    const statusSub = document.getElementById('status-sub');
+
+    const SOG_FILE = './completeModel_2.5M_Gaussians_260k_iterations_MRNF.sog';
+
+    if (window.location.protocol === 'file:') {
+      spinner.style.display = 'none';
+      statusTitle.textContent = 'Interactive 3D Splat Viewer Requires HTTP/HTTPS';
+      statusSub.innerHTML = 'Browsers block streaming <code>.sog</code> WebGL/WebGPU assets over local <code>file://</code> URLs. Once opened on <strong>GitHub Pages</strong> (or a local web server such as VS Code Live Server), the interactive 2.5M Gaussian Splat renders here automatically.';
+    } else {
+      try {
+        const [{ createViewer }, { defaultSettings }] = await Promise.all([
+          import('@playcanvas/supersplat-viewer/viewer'),
+          import('@playcanvas/supersplat-viewer/settings')
+        ]);
+
+        const settings = defaultSettings();
+        if (settings.background) {
+          settings.background.color = [0.086, 0.122, 0.106];
+        }
+
+        const viewer = await createViewer({
+          container: document.getElementById('viewer-container'),
+          settings,
+          contentUrl: SOG_FILE,
+          posterUrl: './cover.png'
+        });
+
+        statusBox.classList.add('hidden');
+      } catch (err) {
+        console.warn('SuperSplat viewer fallback triggered:', err);
+        // Fallback to PlayCanvas Web Components (<pc-app> / <pc-splat>) if needed
+        try {
+          await import('https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/web-components.mjs');
+          const container = document.getElementById('viewer-container');
+          const appEl = document.createElement('div');
+          appEl.style.width = '100%';
+          appEl.style.height = '100%';
+          appEl.innerHTML = `
+            <pc-app antialias="false" max-pixel-ratio="1">
+              <pc-asset src="https://cdn.jsdelivr.net/npm/playcanvas@2/scripts/esm/camera-controls.mjs"></pc-asset>
+              <pc-asset id="splat-sog" src="${SOG_FILE}"></pc-asset>
+              <pc-scene>
+                <pc-entity position="0 1.2 -2.5">
+                  <pc-camera clear-color="0.086 0.122 0.106 1"></pc-camera>
+                  <pc-script name="cameraControls"></pc-script>
+                </pc-entity>
+                <pc-entity rotation="0 0 180">
+                  <pc-splat asset="splat-sog"></pc-splat>
+                </pc-entity>
+              </pc-scene>
+            </pc-app>
+          `;
+          container.appendChild(appEl);
+          statusBox.classList.add('hidden');
+        } catch (fallbackErr) {
+          spinner.style.display = 'none';
+          statusTitle.textContent = 'Could not load 3D Gaussian Splat';
+          statusSub.textContent = String(fallbackErr?.message || err?.message || 'Unknown error');
+        }
+      }
+    }
+  </script>
+</body>
+</html>

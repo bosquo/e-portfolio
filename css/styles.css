@@ -682,13 +682,31 @@ button {
 .modal-dialog {
   background: var(--surface);
   border-radius: var(--radius);
-  max-width: 780px;
+  max-width: 880px;
   width: 100%;
-  max-height: 88vh;
+  max-height: 90vh;
   overflow-y: auto;
   padding: 2.25rem;
   position: relative;
   box-shadow: var(--shadow-lg);
+}
+
+.modal-splat-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #161F1B;
+  margin-top: 0.6rem;
+  margin-bottom: 0.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-splat-iframe {
+  width: 100%;
+  height: 460px;
+  border: none;
+  display: block;
+  background: #161F1B;
 }
 
 .modal-close {

@@ -45,6 +45,8 @@ const UNIVERSITY_PROJECTS = [
     ],
     image: "assets/projects/project_1_master_thesis/cover.png",
     imageContain: true,
+    splatViewerUrl: "assets/projects/project_1_master_thesis/viewer.html",
+    splatCaption: "Interactive 3D Gaussian Splat (2.5M Gaussians, 260k iterations, MRNF optimizer in LichtFeld Studio) — Orbit, pan, zoom, or fly through the reconstructed iDEAS:lab.",
     figures: [
       {
         src: "assets/projects/project_1_master_thesis/cover.png",
@@ -55,6 +57,10 @@ const UNIVERSITY_PROJECTS = [
       {
         label: "Read Thesis Excerpt & Workflow (PDF)",
         url: "assets/projects/project_1_master_thesis/report.pdf"
+      },
+      {
+        label: "Open 3D Gaussian Splat in Full Tab",
+        url: "assets/projects/project_1_master_thesis/viewer.html"
       }
     ]
   },
@@ -600,6 +606,22 @@ function openProjectModal(id) {
   const content = document.getElementById("modal-content");
   if (!p || !modal || !content) return;
 
+  const splatHtml = p.splatViewerUrl
+    ? `
+      <div class="modal-section-label">Interactive 3D Gaussian Splat (PlayCanvas SuperSplat)</div>
+      <div class="modal-splat-wrapper">
+        <iframe
+          src="${p.splatViewerUrl}"
+          class="modal-splat-iframe"
+          title="Interactive 3D Gaussian Splat Viewer — ${p.title}"
+          allow="fullscreen; xr-spatial-tracking"
+          loading="lazy"
+        ></iframe>
+        ${p.splatCaption ? `<div class="modal-figure-caption">${p.splatCaption}</div>` : ""}
+      </div>
+    `
+    : "";
+
   const figuresHtml =
     p.figures && p.figures.length > 0
       ? `
@@ -644,6 +666,8 @@ function openProjectModal(id) {
     <h2 style="margin: 0 0 1rem; font-size: 1.55rem;">${p.title}</h2>
     <p style="color: var(--text-secondary); margin-bottom: 1rem;">${p.overview}</p>
 
+    ${splatHtml}
+
     <div class="modal-section-label">Methodology &amp; Implementation</div>
     <ul class="modal-list">
       ${p.methodology.map((m) => `<li>${m}</li>`).join("")}
@@ -668,10 +692,12 @@ function openProjectModal(id) {
 
 function closeModal() {
   const modal = document.getElementById("project-modal");
+  const content = document.getElementById("modal-content");
   if (!modal) return;
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
+  if (content) content.innerHTML = "";
 }
 
 function initModal() {
